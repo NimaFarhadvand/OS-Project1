@@ -38,7 +38,7 @@ bool ModularKernel::unload_module(const std::string& name) {
 
     if (it == modules_.end()) {
         tracer_.record_call(
-            "KernelCore", name, "UNLOAD_MODULE",
+            "KernelCore", name, "UNLOAD_REJECTED",
             "Rejected: module not found"
         );
         return false;
@@ -52,7 +52,7 @@ bool ModularKernel::unload_module(const std::string& name) {
     // Never unload a file-system module while it owns open handles.
     if (fs != nullptr && fs->get_active_handle_count() > 0) {
         tracer_.record_call(
-            "KernelCore", name, "UNLOAD_MODULE",
+            "KernelCore", name, "UNLOAD_REJECTED",
             "Rejected: active handles = " +
             std::to_string(fs->get_active_handle_count())
         );
@@ -75,7 +75,7 @@ bool ModularKernel::unload_module(const std::string& name) {
     modules_.erase(it);
 
     tracer_.record_call(
-        "KernelCore", name, "UNLOAD_MODULE",
+        "KernelCore", name, "UNLOAD_SUCCESS",
         "Successfully unloaded: " + mod->get_type()
     );
 
