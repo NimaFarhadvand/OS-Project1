@@ -123,15 +123,38 @@ void ReadOnlyFSModule::on_unload() {
     active_handles_ = 0;
 }
 
-int ReadOnlyFSModule::open_file(const std::string& path, OpenMode mode) {
-    // TODO
-    // Allow read-only access to existing files and track opened handles.
 
-    // YOUR CODE HERE
-    (void)path;
-    (void)mode;
-    return ErrorCode::PermissionDenied;
+int ReadOnlyFSModule::open_file(const std::string& path, OpenMode mode) {
+    if (!is_loaded_ || path.empty()) {
+        return ErrorCode::InvalidArgument;
+    }
+
+    // Read-only policy: reject every mode except Read.
+    if (mode != OpenMode::Read) {
+        return ErrorCode::PermissionDenied;
+    }
+
+    // Only existing files can be opened.
+    if (!file_engine_.file_exists(path)) {
+        return ErrorCode::NotFound;
+    }
+
+    int handle = allocate_handle();
+    if (handle < 0) {
+        return ErrorCode::NoSpace;
+    }
+
+    ModularHandleEntry& entry = handles_[handle];
+    entry.path = path;
+    entry.mode = OpenMode::Read;
+    entry.offset = 0;
+    entry.is_open = true;
+
+    active_handles_++;
+
+    return handle;
 }
+
 
 int ReadOnlyFSModule::read_file(int handle, uint8_t* out_buf, size_t max_bytes) {
     if (!is_valid_handle(handle)) return ErrorCode::InvalidHandle;
