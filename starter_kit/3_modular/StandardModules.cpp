@@ -167,10 +167,7 @@ int ReadOnlyFSModule::read_file(int handle, uint8_t* out_buf, size_t max_bytes) 
 }
 
 int ReadOnlyFSModule::write_file(int handle, const uint8_t* in_data, size_t count) {
-    // TODO
-    // Reject every write request with PermissionDenied.
 
-    // YOUR CODE HERE
     (void)handle;
     (void)in_data;
     (void)count;
