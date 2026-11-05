@@ -16,15 +16,6 @@ Layer2_FileSystem::Layer2_FileSystem(Layer1_Drivers& drivers, Tracer& tracer)
                        return drivers_.driver_write_sector(sector, b);
                    }) {}
 
-void Layer2_FileSystem::process_request(ParameterBlock& pb) {
-    tracer_.record_domain_switch("UserSpace", "LayeredKernel", "request");
-    // TODO
-    // Dispatch the requested operation and store its result in pb.status.
-
-    // YOUR CODE HERE
-    pb.status = ErrorCode::InvalidArgument;
-    tracer_.record_domain_switch("LayeredKernel", "UserSpace", "request_return");
-}
 
 int Layer2_FileSystem::handle_open(const std::string& path, OpenMode mode) {
     if (path.empty()) return ErrorCode::InvalidArgument;
@@ -55,24 +46,94 @@ int Layer2_FileSystem::handle_open(const std::string& path, OpenMode mode) {
     return handle;
 }
 
-int Layer2_FileSystem::handle_read(int handle, uint8_t* out_buffer, size_t length) {
+
+void Layer2_FileSystem::process_request(ParameterBlock& pb) {
+    tracer_.record_domain_switch(
+        "UserSpace", "LayeredKernel", "request"
+    );
+
+    switch (pb.op) {
+        case LayerOp::Open:
+            pb.status = handle_open(pb.path, pb.mode);
+            break;
+
+        case LayerOp::Read:
+            pb.status = handle_read(
+                pb.handle,
+                pb.buffer,
+                pb.length
+            );
+            break;
+
+        case LayerOp::Write:
+            pb.status = handle_write(
+                pb.handle,
+                pb.write_buffer,
+                pb.length
+            );
+            break;
+
+        case LayerOp::Close:
+            pb.status = handle_close(pb.handle);
+            break;
+
+        case LayerOp::ConsoleWrite:
+            pb.status = handle_console_write(pb.text);
+            break;
+
+        default:
+            pb.status = ErrorCode::InvalidArgument;
+            break;
+    }
+
+    tracer_.record_domain_switch(
+        "LayeredKernel", "UserSpace", "request_return"
+    );
+}
+
+
+int Layer2_FileSystem::handle_read(
+    int handle,
+    uint8_t* out_buffer,
+    size_t length) {
+
     if (!is_valid_handle(handle)) {
         return ErrorCode::InvalidHandle;
     }
+
     Layer2FileHandle& entry = handles_[handle];
+
     if (entry.mode == OpenMode::Write) {
         return ErrorCode::PermissionDenied;
     }
-    if (length == 0) return 0;
-    if (out_buffer == nullptr) return ErrorCode::InvalidArgument;
 
-    int bytes = file_engine_.read_bytes(entry.path, entry.offset, out_buffer, length);
+    if (length == 0) return 0;
+
+    if (out_buffer == nullptr) {
+        return ErrorCode::InvalidArgument;
+    }
+
+    int bytes = file_engine_.read_bytes(
+        entry.path,
+        entry.offset,
+        out_buffer,
+        length
+    );
+
     if (bytes > 0) {
         entry.offset += bytes;
-        tracer_.record_data_copy(bytes, "Layer2_FSBuffer", "Layer3_UserBuffer");
+
+        tracer_.record_data_copy(
+            bytes,
+            "Layer2_FSBuffer",
+            "Layer3_UserBuffer"
+        );
     }
+
     return bytes;
 }
+
+
 
 int Layer2_FileSystem::handle_write(int handle, const uint8_t* in_buffer, size_t length) {
     if (!is_valid_handle(handle)) {
